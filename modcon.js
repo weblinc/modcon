@@ -1,7 +1,6 @@
 window.WEBLINC = window.WEBLINC || {};
 
 window.WEBLINC.modules = (function () {
-
     'use strict';
 
     var $document = $(document),
