@@ -11,13 +11,28 @@ module.exports = function(grunt) {
         src: '<%= pkg.name %>.js',
         dest: '<%= pkg.name %>.min.js'
       }
+    },
+    jasmine_node: {
+      options: {
+        forceExit: true,
+        match: '.',
+        matchall: false,
+        extensions: 'js',
+        specNameMatcher: 'spec',
+        jUnit: {
+          report: true,
+          savePath : "./build/reports/jasmine/",
+          useDotNotation: true,
+          consolidate: true
+        }
+      },
+      all: ['spec/']
     }
   });
 
-  // Load the plugin that provides the "uglify" task.
   grunt.loadNpmTasks('grunt-contrib-uglify');
+  grunt.loadNpmTasks('grunt-jasmine-node');
 
   // Default task(s).
-  grunt.registerTask('default', ['uglify']);
-
+  grunt.registerTask('default', ['jasmine_node', 'uglify']);
 };
