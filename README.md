@@ -6,6 +6,7 @@ modcon.js
 ## Dependencies
 
   1. jQuery
+  2. Underscore.js
 
 ## Usage
 
