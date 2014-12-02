@@ -72,7 +72,7 @@ Given that we have every module loaded on every page, the ModCon-enabled Module 
 
 jQuery Plugins load their parent library's functionality and are called from a separate client script. For example, FancyBox's JavaScript, StyleSheets, and Images are all loaded and ready to go on every page whether or not a client JavaScript file ever uses the ```$('.selector').fancyBox()``` call.
 
-ModCon modules act a bit differently. All modules are scoped to a property of ```window``` called ```WEBLINC``` (a namespace you can change for your project, if you wish). Inside that property we have a collection of every module available to the front-end. You can even type ```WEBLINC``` into your console to see which modules are ready to go.
+ModCon modules act a bit differently. All modules are scoped to a property of ```window``` called ```WEBLINC```. Inside that property we have a collection of every module available to the front-end. You can even type ```window.WEBLINC``` into your console to see which modules are ready to go.
 
 Every ModCon module makes use of the Function Expression, or ```var myFunction = function () { ... }```. Function Expressions reserve space in memory, but do not utilize that memory until they are called. For example, if I define a very large function as a Function Expression, but my module never calls it then the memory is never used.
 
@@ -89,6 +89,31 @@ This means that any ModCon module can announce to all of the other modules in th
 1. Each and every function performs one and only one task
 2. Verbosely name your methods for self-documenting code and readability
 3. ```$scope``` is everything. Make sure all traversal is scoped properly!
+
+### The Queues
+
+ModCon manages two queues for you, a "on DOM ready" queue, and a "when the DOM is updated" queue. You register your module to these queues by adding the following code to your module:
+
+```javascript
+WEBLINC.modules.onDomReady(init);
+WEBLINC.modules.onDomUpdate(init);
+```
+
+The modules added to the ```onDomReady``` queue are fired via ```WEBLINC.modules.domReady()``` (which you can see in action at the bottom of the example in [this section](#order-of-operations)). This should only happen once, and only after each of your modules have been added to the page.
+
+The modules added to the ```onDomUpdate``` queue are fired via ```WEBLINC.modules.domUpdate($('.some-new-scope'))```. This call is fired within any module that has significantly changed the markup on the page, requiring a set of modules the be rerun but within a limited scope (which the module itself can define).
+
+### Triggering a Dom Update
+
+From inside any module, at any time, you can re-run the modules that have been added to the ```onDomUpdate()``` queue by firing:
+
+```javascript
+WEBLINC.modules.domUpdate($('.some-scope'));
+```
+
+Once this "event" occurs, modules that include ```WEBLINC.modules.onDomUpdate(init)``` will be automatically re-run, but with the scope specified in the aforementioned code.
+
+This is why it's very important to always give each of your jQuery queries a sense of scope though ```$.find()```, ```$.closest()```, ```$('.selector', $scope)```, etc.
 
 ### How to Write a ModCon Enabled Module
 
@@ -206,14 +231,70 @@ WEBLINC.myReallyComplexModule = (function () {
 }());
 ```
 
-### Triggering a Dom Update
-
-From inside any module, at any time, you can re-run your suite of modules that have been added to the **domUpdate** queue by firing:
+Here's a real life example to help drive the point home. This module features the concepts we've discussed thus far, and also shows how each module can reference the public methods from any other module being managed by ModCon:
 
 ```javascript
-WEBLINC.modules.domUpdate($('.some-scope'));
+WEBLINC.productDetailsZoom = (function () {
+    'use strict';
+
+    var MINIMUM_BREAK_POINT = 'medium',
+
+        DIALOG_OPTIONS = { dialogClass: 'ui-dialog--product-zoom' },
+
+        getImageSource = function (anchorElement) {
+            return anchorElement.href;
+        },
+
+        getDialogContent = function (imageSource) {
+            return $(JST['weblinc/store_front/templates/product_zoom_dialog']({ src: imageSource }));
+        },
+
+        gettingImage = function (imageSource, $dialogContent) {
+            var gettingImage = $.Deferred(),
+                $image = $('<img>');
+
+            $image
+            .on('load', function () {
+                gettingImage.resolve($dialogContent);
+            })
+            .attr('src', imageSource);
+
+            return gettingImage.promise();
+        },
+
+        openDialog = function (promise) {
+            WEBLINC.dialogs.openDialog(promise, DIALOG_OPTIONS, false);
+        },
+
+        handleImageClick = function (anchorElement) {
+            var imageSource = getImageSource(anchorElement),
+                $dialogContent = getDialogContent(imageSource),
+                promise = gettingImage(imageSource, $dialogContent);
+
+            openDialog(promise);
+        },
+
+        listenForImageClick = function ($detailsContainers) {
+            $detailsContainers.on('click', '.primary-image a', function (e) {
+                if (WEBLINC.breakPoints.currentlyLessThan(MINIMUM_BREAK_POINT)) { return; }
+                e.preventDefault();
+                handleImageClick(this);
+            });
+        },
+
+        init = function ($scope) {
+            var $detailsContainers = $scope.is('.wl-product-details') ? $scope : $('.wl-product-details', $scope);
+
+            if (_.isEmpty($detailsContainers)) { return; }
+
+            listenForImageClick($detailsContainers);
+        };
+
+    WEBLINC.modules.onDomReady(init);
+    WEBLINC.modules.onDomUpdate(init);
+
+    return {
+        init: init
+    };
+}());
 ```
-
-Once this "event" occurs, modules that include ```WEBLINC.modules.onDomUpdate(init)``` will be automatically re-run, but with the scope specified in the aforementioned code.
-
-This is why it's very important to always give each of your jQuery queries a sense of scope though ```$.find()```, ```$.closest()```, ```$('.selector', $scope)```, etc.
